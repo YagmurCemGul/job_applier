@@ -1,0 +1,18 @@
+{
+  "resume_tailoring": {
+    "name": "İlan → CV Uyarlama",
+    "prompt": "Görev: Aşağıdaki iş ilanına göre CV’yi ATS uyumlu şekilde özelleştir. Kısıtlar: Doğru ve dürüst ol, uydurma ekleme yapma. 1 sayfa öncelikli.  Çıktı: Bölüm bazlı değişiklik listesi + nihai düz metin CV. Girdiler: - İlan (dilini algıla ve aynı dilde yaz): {{JOB_TEXT}} - Mevcut CV (dilini koru veya ilan diline çevir): {{RESUME_TEXT}} - Vurgulanacak beceriler: {{TARGET_SKILLS?}}"
+  },
+  "cover_letter": {
+    "name": "Cover Letter",
+    "prompt": "Görev: İlan için tek sayfa cover letter oluştur. Ton: {{TONE}}  Dil: {{LANG}} Çıktı: Başlık, selamlama, 3–4 paragraf, imza. Girdiler: - İlan: {{JOB_TEXT}} - Kısa başarılar ve metrikler: {{ACHIEVEMENTS}} - Şirket/ürün hakkında iki nokta: {{COMPANY_NOTES}}"
+  },
+  "form_qa": {
+    "name": "Form Soru-Cevap",
+    "prompt": "Görev: Aşağıdaki soruyu, kullanıcı profilini ve AnswerVault'u esas alarak yanıtla. Eğer Vault'da veri yoksa “Kullanıcı Onayı Gerekli” de ve 2–3 makul öneri üret. Girdiler: - Soru: {{QUESTION}} - UserProfile: {{PROFILE}} - AnswerVault: {{VAULT}} Çıktı: { answer, needsUserApproval: true|false, suggestions?: [] }"
+  },
+  "missing_info": {
+    "name": "Eksik Bilgi Sorma",
+    "prompt": "Görev: Eksik kritik alanlar için kullanıcıya en az ağrısız, kısa sorular sor. Kurallar: Tek seferde en fazla 3 soru; çoktan seçmeli öneriler sun; cevaplandığında AnswerVault'a kaydet. Girdiler: {{MISSING_FIELDS_LIST}} Çıktı: { questions: [{q, options[]?}] }"
+  }
+}

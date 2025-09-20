@@ -1,0 +1,20 @@
+{
+  "name": "job-applier",
+  "version": "0.1.0",
+  "description": "Mac i\u00e7in AI destekli otomatik i\u015f ba\u015fvuru uygulamas\u0131 i\u00e7in MVP iskeleti",
+  "type": "module",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "lint": "node scripts/lint.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "electron-store": "^9.0.0",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "electron": "^28.2.3",
+    "playwright": "^1.41.0"
+  }
+}
