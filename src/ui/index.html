@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Job Applier MVP</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>AI Destekli İş Başvuru Paneli</h1>
+      <button id="scan-jobs">İlanları Tara</button>
+    </header>
+    <main>
+      <section class="column">
+        <h2>Bulunan İlanlar</h2>
+        <ul id="job-list"></ul>
+      </section>
+      <section class="column">
+        <h2>Üretilen Dokümanlar</h2>
+        <div>
+          <h3>CV Uyarlama Çıktısı</h3>
+          <pre id="resume-output" class="output"></pre>
+        </div>
+        <div>
+          <h3>Cover Letter</h3>
+          <pre id="cover-letter-output" class="output"></pre>
+        </div>
+      </section>
+      <section class="column">
+        <h2>Form Yanıtı</h2>
+        <textarea id="form-question" placeholder="Form sorusunu girin"></textarea>
+        <button id="answer-form">Yanıt Öner</button>
+        <pre id="form-answer" class="output"></pre>
+      </section>
+    </main>
+    <footer>
+      <small>Demo: İnsan benzeri otomasyon için Playwright tetiklenmeye hazır.</small>
+    </footer>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
