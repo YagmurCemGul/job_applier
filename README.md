@@ -9,7 +9,7 @@ Bu depo, macOS üzerinde çalışacak AI destekli otomatik iş başvuru uygulama
 - `tests/` dizininde Node test runner ile çalıştırılabilir örnek testler
 
 ## Teknoloji Seçimleri
-- **Electron + Vanilla JS UI**: macOS paketleme ve hızlı prototip; çok sekmeli arayüz onboarding, ilan tarama, pipeline, Answer Vault ve ayarlar ekranlarına ayrıldı.
+- **Electron + React/Tailwind UI**: macOS paketleme ve hızlı prototip; React bileşenleri ve Tailwind yardımcı sınıflarıyla onboarding, ilan tarama, pipeline, Answer Vault ve ayarlar ekranlarına ayrılmış çok sekmeli arayüz.
 - **Playwright**: LinkedIn/Indeed/Hiring.cafe otomasyonu için temel sürücüler (stub)
 - **LLM Web Automation Katmanı**: ChatGPT/Gemini/Claude sohbet arayüzlerini Playwright ile kontrol eden sürücü soyutlaması; `mock` sürücü, cover letter / CV uyarlama / form Q&A ve eksik bilgi akışlarını demo eder, oturum testi ve web profili bağlama sihirbazı UI’da sunulur.
 - **In-memory Pipeline Store + Answer Vault**: Başvurular pipeline sütunlarına kaydedilir, cevaplar yerel kasada tutulur; gerçek ortamda SQLCipher ve macOS Keychain entegrasyonu planlanmıştır.
@@ -22,13 +22,17 @@ Bu depo, macOS üzerinde çalışacak AI destekli otomatik iş başvuru uygulama
    ```bash
    npm install
    ```
-4. Elektron örneğini başlatın:
+4. Tailwind CSS ve React renderer paketini derleyin (Electron komutu bunu otomatik olarak çalıştırır ancak manuel derleme için kullanılabilir):
+   ```bash
+   npm run build
+   ```
+5. Elektron örneğini başlatın:
    ```bash
    npm start
    ```
    > Notlar:
    > - İlk açılışta onboarding formunu doldurun; UI, Answer Vault ve pipeline verilerini sizin girdilerinizle günceller.
-   > - LLM Hesap Bağlama sihirbazından (sağ üstteki buton) mock sağlayıcı için profil dizini belirleyebilir, ardından “Oturumu Test Et” ile mock web sürücüsünü doğrulayabilirsiniz.
+   > - LLM Hesap Bağlama sihirbazı ilk açılışta otomatik gösterilir; gerçek bir ChatGPT/Gemini/Claude profili bağlayana kadar kapanmaz.
    > - Playwright sürücüleri demo modundadır; gerçek tarama için Playwright `install` komutlarını çalıştırmanız ve gerçek giriş profilleri sağlamanız gerekir.
    > - LLM oturum penceresi headful modda açıldığında uzun yanıtlar sırasında pencereyi kapatmayın (arka plana alınabilir).
 

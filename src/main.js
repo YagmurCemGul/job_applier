@@ -103,7 +103,7 @@ function createWindow() {
     }
   });
 
-  mainWindow.loadFile(join(__dirname, 'ui/index.html'));
+  mainWindow.loadFile(join(__dirname, '..', 'dist', 'index.html'));
 }
 
 app.whenReady().then(() => {
