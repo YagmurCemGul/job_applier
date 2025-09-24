@@ -1,5 +1,35 @@
 import { composePrompt } from '../llm/promptComposer.js';
 import { computeMatchScore } from '../data/models.js';
+import { PipelineStore, groupByStatus } from './pipelineStore.js';
+
+const QUESTION_LANG = 'tr';
+
+let defaultVaultAdapter;
+try {
+  const vaultModule = await import('../data/vault.js');
+  defaultVaultAdapter = {
+    get: vaultModule.getAnswer,
+    set: vaultModule.upsertAnswer,
+    list: vaultModule.listAnswers,
+    remove: vaultModule.removeAnswer
+  };
+} catch (error) {
+  defaultVaultAdapter = {
+    get: () => undefined,
+    set: () => undefined,
+    list: () => ({}),
+    remove: () => undefined
+  };
+}
+
+function buildQuestionKey(question) {
+  return question
+    .toLowerCase()
+    .replace(/[^a-z0-9çğıöşü\s]/gi, '')
+    .trim()
+    .replace(/\s+/g, '_')
+    .slice(0, 120);
+}
 
 /**
  * Basit orchestrator örneği
@@ -16,10 +46,14 @@ export class Orchestrator {
    *  profile: import('../data/models.js').UserProfile
    * }} deps
    */
-  constructor({ provider, scrapers, profile }) {
+  constructor({ provider, scrapers, profile, pipelineStore, settings, vaultAdapter }) {
     this.provider = provider;
     this.scrapers = scrapers;
     this.profile = profile;
+    this.settings = settings;
+    this.pipelineStore = pipelineStore ?? new PipelineStore();
+    this.vault = vaultAdapter ?? defaultVaultAdapter;
+    this.jobCache = new Map();
   }
 
   /**
@@ -32,10 +66,13 @@ export class Orchestrator {
       this.scrapers.hiringCafe.searchJobs(params)
     ]);
     const jobs = results.flat();
-    return jobs.map((job) => ({
+    return jobs.map((job) => {
+      this.jobCache.set(job.id, job);
+      return {
       job,
       match: computeMatchScore(job, this.profile)
-    }));
+    };
+    });
   }
 
   /**
@@ -62,11 +99,136 @@ export class Orchestrator {
   }
 
   async answerQuestion(question, vaultEntry) {
+    const questionKey = buildQuestionKey(question);
+    const existing = vaultEntry ?? this.vault.get(questionKey);
+    if (existing?.answer) {
+      return {
+        answer: existing.answer,
+        needsUserApproval: false,
+        questionKey,
+        source: 'vault'
+      };
+    }
     const prompt = composePrompt('form_qa', {
       QUESTION: question,
       PROFILE: this.profile,
-      VAULT: vaultEntry ?? {}
+      VAULT: this.vault.list()
     });
-    return this.provider.answerFormQuestion({ question, prompt, profile: this.profile, vaultEntry });
+    const response = await this.provider.answerFormQuestion({
+      question,
+      prompt,
+      profile: this.profile,
+      vaultEntry: existing
+    });
+    if (!response.needsUserApproval && response.answer) {
+      this.vault.set({
+        questionKey,
+        answer: response.answer,
+        lang: QUESTION_LANG,
+        updatedAt: new Date().toISOString()
+      });
+    }
+    return { ...response, questionKey };
+  }
+
+  getVaultEntries() {
+    return this.vault.list();
+  }
+
+  saveVaultEntry(entry) {
+    this.vault.set({
+      ...entry,
+      updatedAt: entry.updatedAt ?? new Date().toISOString()
+    });
+    return this.vault.get(entry.questionKey);
+  }
+
+  deleteVaultEntry(questionKey) {
+    this.vault.remove(questionKey);
+  }
+
+  listApplications() {
+    return this.pipelineStore.list();
+  }
+
+  getPipelineSummary() {
+    return groupByStatus(this.pipelineStore.list());
+  }
+
+  applyToJob(jobId, options = {}) {
+    const job = this.jobCache.get(jobId);
+    if (!job) {
+      throw new Error('İlan bulunamadı');
+    }
+    return this.pipelineStore.createFromJob(job, options);
+  }
+
+  updateApplicationStatus(applicationId, status) {
+    return this.pipelineStore.updateStatus(applicationId, status);
+  }
+
+  getProfile() {
+    return this.profile;
+  }
+
+  updateProfile(patch) {
+    this.profile = {
+      ...this.profile,
+      ...patch,
+      roles: patch.roles ?? this.profile.roles,
+      locations: patch.locations ?? this.profile.locations,
+      languages: patch.languages ?? this.profile.languages,
+      salaryRange: {
+        ...this.profile.salaryRange,
+        ...patch.salaryRange
+      }
+    };
+    return this.profile;
+  }
+
+  getSettings() {
+    return this.settings;
+  }
+
+  updateSettings(patch) {
+    this.settings = {
+      ...this.settings,
+      ...patch,
+      sessions: { ...this.settings?.sessions, ...patch?.sessions }
+    };
+    if (patch?.sessions?.[this.settings.targetLLM]) {
+      this.provider.setDefaultSessionProfile({
+        ...this.provider.defaultSessionProfile,
+        ...patch.sessions[this.settings.targetLLM]
+      });
+    }
+    return this.settings;
+  }
+
+  bindSession(providerKey, sessionProfile) {
+    const now = new Date().toISOString();
+    this.settings.sessions = {
+      ...this.settings.sessions,
+      [providerKey]: {
+        profilePath: sessionProfile.profilePath,
+        lastLoginAt: now,
+        cookiesEncrypted: true
+      }
+    };
+    this.settings.targetLLM = providerKey;
+    this.provider.setDefaultSessionProfile({
+      profilePath: sessionProfile.profilePath,
+      lastLoginAt: now
+    });
+    return this.settings.sessions[providerKey];
+  }
+
+  async testLLMSession() {
+    return this.provider.testSession?.() ?? { ok: true, provider: 'mock' };
+  }
+
+  async askForMissingFields(missingFields) {
+    const prompt = composePrompt('missing_info', { MISSING_FIELDS_LIST: missingFields });
+    return this.provider.askForMissing({ missingFields, prompt });
   }
 }

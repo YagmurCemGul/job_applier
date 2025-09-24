@@ -3,40 +3,227 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Job Applier MVP</title>
+    <title>AI İş Başvuru Asistanı</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <header>
-      <h1>AI Destekli İş Başvuru Paneli</h1>
-      <button id="scan-jobs">İlanları Tara</button>
+    <header class="app-header">
+      <div>
+        <h1>AI Destekli İş Başvuru Asistanı</h1>
+        <p>macOS için Playwright + LLM otomasyon demosu</p>
+      </div>
+      <div class="header-actions">
+        <button id="open-llm-wizard" class="secondary">LLM Hesap Bağla</button>
+        <span id="session-indicator" class="status status-idle">LLM oturumu bağlı değil</span>
+      </div>
     </header>
+
+    <nav class="tab-bar">
+      <button data-view="onboarding" class="active">Onboarding</button>
+      <button data-view="jobs">İlanlar</button>
+      <button data-view="applications">Başvurular</button>
+      <button data-view="vault">Cevap Kasası</button>
+      <button data-view="settings">Ayarlar</button>
+    </nav>
+
     <main>
-      <section class="column">
-        <h2>Bulunan İlanlar</h2>
-        <ul id="job-list"></ul>
+      <section id="view-onboarding" class="view active">
+        <h2>İlk Kurulum</h2>
+        <form id="onboarding-form" class="card">
+          <div class="grid">
+            <label>
+              Ad Soyad
+              <input type="text" name="name" placeholder="Ad Soyad" required />
+            </label>
+            <label>
+              E-posta
+              <input type="email" name="email" placeholder="ornek@example.com" required />
+            </label>
+            <label>
+              Hedef Roller
+              <input type="text" name="roles" placeholder="Product, Software, Design" />
+            </label>
+            <label>
+              Tercih Edilen Lokasyonlar
+              <input type="text" name="locations" placeholder="Remote, İstanbul, Berlin" />
+            </label>
+            <label>
+              Uzaktan Çalışma Tercihi
+              <select name="remotePreference">
+                <option value="any">Farketmez</option>
+                <option value="remote">Remote</option>
+                <option value="hybrid">Hibrit</option>
+                <option value="onsite">Ofis</option>
+              </select>
+            </label>
+            <label>
+              Maaş Alt Limiti (Yıllık)
+              <input type="number" name="salaryMin" placeholder="750000" />
+            </label>
+            <label>
+              Bildirim Süresi
+              <input type="text" name="noticePeriod" placeholder="2 hafta" />
+            </label>
+            <label>
+              Diller
+              <input type="text" name="languages" placeholder="tr:ana dil,en:ileri" />
+            </label>
+            <label class="full-row checkbox">
+              <input type="checkbox" name="relocation" />
+              Gerekirse taşınabilirim
+            </label>
+            <label class="full-row">
+              Günlük başvuru limiti
+              <input type="number" name="dailyCap" min="1" max="30" value="10" />
+            </label>
+          </div>
+          <button type="submit">Profili Kaydet</button>
+          <p class="hint">Bu bilgiler Answer Vault ve otomatik başvuru akışında kullanılacak.</p>
+        </form>
       </section>
-      <section class="column">
-        <h2>Üretilen Dokümanlar</h2>
-        <div>
-          <h3>CV Uyarlama Çıktısı</h3>
-          <pre id="resume-output" class="output"></pre>
-        </div>
-        <div>
-          <h3>Cover Letter</h3>
-          <pre id="cover-letter-output" class="output"></pre>
+
+      <section id="view-jobs" class="view">
+        <div class="layout-two">
+          <section>
+            <h2>İlan Tarama</h2>
+            <form id="job-filter-form" class="card">
+              <div class="grid">
+                <label>
+                  Lokasyon / Saat Dilimi
+                  <input type="text" name="location" placeholder="Remote, İstanbul" />
+                </label>
+                <label>
+                  Roller
+                  <input type="text" name="roles" placeholder="Product, Software" />
+                </label>
+                <label>
+                  Anahtar Kelimeler
+                  <input type="text" name="keywords" placeholder="LLM, Playwright" />
+                </label>
+                <label>
+                  Uzaktan Tercihi
+                  <select name="remote">
+                    <option value="any">Hepsi</option>
+                    <option value="remote">Remote</option>
+                    <option value="hybrid">Hibrit</option>
+                    <option value="onsite">Ofis</option>
+                  </select>
+                </label>
+                <label>
+                  İlan Dili
+                  <select name="language">
+                    <option value="">TR/EN</option>
+                    <option value="tr">Türkçe</option>
+                    <option value="en">İngilizce</option>
+                  </select>
+                </label>
+              </div>
+              <button type="submit">İlanları Tara</button>
+            </form>
+            <ul id="job-list" class="job-list"></ul>
+          </section>
+          <aside class="side-panel">
+            <div class="card">
+              <h3>CV Uyarlama Önizlemesi</h3>
+              <pre id="resume-output" class="output"></pre>
+            </div>
+            <div class="card">
+              <h3>Cover Letter Taslağı</h3>
+              <pre id="cover-letter-output" class="output"></pre>
+            </div>
+            <div class="card">
+              <h3>Form Soru Yanıtı</h3>
+              <textarea id="form-question" placeholder="Maaş beklentiniz nedir?"></textarea>
+              <button id="answer-form">Yanıt Öner</button>
+              <pre id="form-answer" class="output"></pre>
+            </div>
+          </aside>
         </div>
       </section>
-      <section class="column">
-        <h2>Form Yanıtı</h2>
-        <textarea id="form-question" placeholder="Form sorusunu girin"></textarea>
-        <button id="answer-form">Yanıt Öner</button>
-        <pre id="form-answer" class="output"></pre>
+
+      <section id="view-applications" class="view">
+        <h2>Başvuru Pipeline</h2>
+        <div id="pipeline-columns" class="pipeline"></div>
+      </section>
+
+      <section id="view-vault" class="view">
+        <h2>Cevap Kasası</h2>
+        <div class="layout-two">
+          <section>
+            <table class="vault-table">
+              <thead>
+                <tr>
+                  <th>Soru Anahtarı</th>
+                  <th>Yanıt</th>
+                  <th>Güncellendi</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="vault-rows"></tbody>
+            </table>
+          </section>
+          <aside class="side-panel">
+            <form id="vault-form" class="card">
+              <h3>Yeni Yanıt Kaydet</h3>
+              <label>
+                Soru
+                <textarea name="question" required></textarea>
+              </label>
+              <label>
+                Yanıt
+                <textarea name="answer" required></textarea>
+              </label>
+              <button type="submit">Kasaya Kaydet</button>
+            </form>
+          </aside>
+        </div>
+      </section>
+
+      <section id="view-settings" class="view">
+        <h2>Ayarlar & Diagnostik</h2>
+        <div class="layout-two">
+          <section class="card">
+            <h3>LLM Oturum Durumu</h3>
+            <p id="settings-llm-status">Oturum doğrulanmadı.</p>
+            <button id="test-session">Oturumu Test Et</button>
+          </section>
+          <section class="card">
+            <h3>Rate Limit & Günlük Kota</h3>
+            <div id="settings-rate-limit"></div>
+          </section>
+        </div>
       </section>
     </main>
+
+    <div id="llm-modal" class="modal hidden">
+      <div class="modal-content">
+        <header>
+          <h2>LLM Hesap Bağlama Sihirbazı</h2>
+          <button id="close-llm-modal" class="icon">×</button>
+        </header>
+        <form id="llm-form" class="wizard">
+          <label>
+            Sağlayıcı
+            <select name="provider">
+              <option value="chatgpt">ChatGPT</option>
+              <option value="gemini">Gemini</option>
+              <option value="claude">Claude</option>
+            </select>
+          </label>
+          <label>
+            Profil Dizini
+            <input name="profilePath" type="text" placeholder="~/Library/Application Support/JobApplier/chatgpt" required />
+          </label>
+          <p class="hint">Giriş yaptıktan sonra oturumun saklandığı klasörü girin. Çerezler şifreli olarak saklanır.</p>
+          <button type="submit">Oturumu Kaydet</button>
+        </form>
+      </div>
+    </div>
+
     <footer>
-      <small>Demo: İnsan benzeri otomasyon için Playwright tetiklenmeye hazır.</small>
+      <small>Demo: CAPTCHA ve 2FA durumlarında manuel müdahale gereklidir.</small>
     </footer>
+
     <script type="module" src="app.js"></script>
   </body>
 </html>

@@ -7,6 +7,7 @@ import { LinkedInScraper } from './automation/linkedinScraper.js';
 import { IndeedScraper } from './automation/indeedScraper.js';
 import { HiringCafeScraper } from './automation/hiringCafeScraper.js';
 import { createUserProfile, createDefaultSettings } from './data/models.js';
+import { PipelineStore } from './pipeline/pipelineStore.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -36,7 +37,8 @@ const scrapers = {
   hiringCafe: new HiringCafeScraper({ playwright: /** @type {any} */ (null), config: scraperConfig })
 };
 
-const orchestrator = new Orchestrator({ provider, scrapers, profile });
+const pipelineStore = new PipelineStore();
+const orchestrator = new Orchestrator({ provider, scrapers, profile, settings, pipelineStore });
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -86,4 +88,57 @@ ipcMain.handle('orchestrator:buildCoverLetter', async (_event, { job, achievemen
 
 ipcMain.handle('orchestrator:answerQuestion', async (_event, { question, vaultEntry }) => {
   return orchestrator.answerQuestion(question, vaultEntry);
+});
+
+ipcMain.handle('orchestrator:getVaultEntries', async () => {
+  return orchestrator.getVaultEntries();
+});
+
+ipcMain.handle('orchestrator:saveVaultEntry', async (_event, entry) => {
+  return orchestrator.saveVaultEntry(entry);
+});
+
+ipcMain.handle('orchestrator:deleteVaultEntry', async (_event, questionKey) => {
+  orchestrator.deleteVaultEntry(questionKey);
+  return true;
+});
+
+ipcMain.handle('orchestrator:listApplications', async () => {
+  return orchestrator.listApplications();
+});
+
+ipcMain.handle('orchestrator:applyToJob', async (_event, { jobId, options }) => {
+  return orchestrator.applyToJob(jobId, options);
+});
+
+ipcMain.handle('orchestrator:updateApplicationStatus', async (_event, { applicationId, status }) => {
+  return orchestrator.updateApplicationStatus(applicationId, status);
+});
+
+ipcMain.handle('orchestrator:getProfile', async () => {
+  return orchestrator.getProfile();
+});
+
+ipcMain.handle('orchestrator:updateProfile', async (_event, patch) => {
+  return orchestrator.updateProfile(patch);
+});
+
+ipcMain.handle('orchestrator:askForMissing', async (_event, missingFields) => {
+  return orchestrator.askForMissingFields(missingFields);
+});
+
+ipcMain.handle('settings:get', async () => {
+  return orchestrator.getSettings();
+});
+
+ipcMain.handle('settings:update', async (_event, patch) => {
+  return orchestrator.updateSettings(patch);
+});
+
+ipcMain.handle('settings:bindSession', async (_event, { provider: providerKey, sessionProfile }) => {
+  return orchestrator.bindSession(providerKey, sessionProfile);
+});
+
+ipcMain.handle('settings:testSession', async () => {
+  return orchestrator.testLLMSession();
 });

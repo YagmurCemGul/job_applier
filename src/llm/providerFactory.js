@@ -228,6 +228,24 @@ export class WebLLMService {
     return finalProfile;
   }
 
+  async testSession() {
+    const profile = await this.ensureSession();
+    await this.driver.sendPrompt({
+      role: 'assistant',
+      purpose: 'form_qa',
+      inputs: { question: 'Oturum testi' }
+    });
+    await this.driver.awaitCompletion({ stallHeuristics: ['typing-indicator'] });
+    await this.driver.handleErrors();
+    const response = await this.driver.readResponse();
+    return {
+      ok: true,
+      provider: this.driver.providerName,
+      profile,
+      sample: response?.text ?? ''
+    };
+  }
+
   /**
    * @param {{ jobText: string, achievements?: string[], tone?: string, language?: string, prompt?: string, sessionProfile?: Record<string, any> }} payload
    */

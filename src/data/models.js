@@ -15,6 +15,10 @@
  * @property {boolean} relocation
  * @property {{ currency: string, min: number, max: number }} salaryRange
  * @property {string} noticePeriod
+ * @property {'remote'|'hybrid'|'onsite'|'any'} [remotePreference]
+ * @property {number} [dailyCap]
+ * @property {string[]} [highlights]
+ * @property {string} [coverTone]
  * @property {string} createdAt
  */
 
@@ -106,6 +110,10 @@ export function createUserProfile(profile = {}) {
     languages: profile.languages ?? [{ code: 'tr', level: 'native' }],
     workAuth: profile.workAuth ?? 'Belirtilmedi',
     relocation: profile.relocation ?? false,
+    remotePreference: profile.remotePreference ?? 'any',
+    dailyCap: profile.dailyCap ?? 10,
+    highlights: profile.highlights ?? [],
+    coverTone: profile.coverTone ?? 'samimi',
     salaryRange:
       profile.salaryRange ??
       {

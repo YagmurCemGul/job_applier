@@ -1,23 +1,12 @@
 import { BaseScraper } from './baseScraper.js';
-import { v4 as uuid } from 'uuid';
+import { loadJobsForSource } from './jobDataset.js';
 
 export class HiringCafeScraper extends BaseScraper {
   async searchJobs(params) {
     await this.throttle('hiringCafe');
-    return [
-      {
-        id: uuid(),
-        source: 'hiring.cafe',
-        url: 'https://hiring.cafe/jobs/789',
-        title: 'Product Designer',
-        company: 'Remote Startup',
-        location: params.location ?? 'Remote',
-        description: 'Design systems, UX research, Figma uzmanlığı.',
-        skills: ['Design Systems', 'UX Research', 'Figma'],
-        salaryHint: {},
-        applyMethod: 'external'
-      }
-    ];
+    const filters = params?.filters ?? params;
+    const jobs = loadJobsForSource('hiringcafe', filters);
+    return jobs.map((job) => ({ ...job }));
   }
 
   async apply(job) {

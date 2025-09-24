@@ -1,5 +1,5 @@
 import { BaseScraper } from './baseScraper.js';
-import { v4 as uuid } from 'uuid';
+import { loadJobsForSource } from './jobDataset.js';
 
 /**
  * LinkedIn sürücüsü (stub)
@@ -10,20 +10,9 @@ export class LinkedInScraper extends BaseScraper {
    */
   async searchJobs(params) {
     await this.throttle('linkedin');
-    return [
-      {
-        id: uuid(),
-        source: 'linkedin',
-        url: 'https://www.linkedin.com/jobs/view/123',
-        title: 'Senior Product Manager',
-        company: 'Örnek Şirket',
-        location: params.location ?? 'Remote',
-        description: 'Ürün stratejisi ve çapraz ekip iş birliği.',
-        skills: ['Product Strategy', 'Roadmap', 'Stakeholder Management'],
-        salaryHint: {},
-        applyMethod: 'platform'
-      }
-    ];
+    const filters = params?.filters ?? params;
+    const jobs = loadJobsForSource('linkedin', filters);
+    return jobs.map((job) => ({ ...job }));
   }
 
   /**

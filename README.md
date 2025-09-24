@@ -1,6 +1,6 @@
 # AI Destekli Otomatik İş Başvuru MVP'si
 
-Bu depo, macOS üzerinde çalışacak AI destekli otomatik iş başvuru uygulamasının mimarisini, UI prototipini ve çalışır durumda minimal bir Electron örneğini içerir.
+Bu depo, macOS üzerinde çalışacak AI destekli otomatik iş başvuru uygulamasının mimarisini, UI prototipini ve çalışır durumda minimal bir Electron örneğini içerir. Son sürümde onboarding sihirbazı, statik iş ilanı veri seti, pipeline takibi ve Cevap Kasası yönetimi gibi temel fonksiyonlar mock LLM sağlayıcısı ile etkileşimli şekilde gösterilmektedir.
 
 ## İçerik
 - `docs/` klasöründe mimari tasarım, UI hiyerarşisi ve test planı
@@ -9,9 +9,10 @@ Bu depo, macOS üzerinde çalışacak AI destekli otomatik iş başvuru uygulama
 - `tests/` dizininde Node test runner ile çalıştırılabilir örnek testler
 
 ## Teknoloji Seçimleri
-- **Electron + Vanilla JS UI**: macOS paketleme ve hızlı prototip imkânı
+- **Electron + Vanilla JS UI**: macOS paketleme ve hızlı prototip; çok sekmeli arayüz onboarding, ilan tarama, pipeline, Answer Vault ve ayarlar ekranlarına ayrıldı.
 - **Playwright**: LinkedIn/Indeed/Hiring.cafe otomasyonu için temel sürücüler (stub)
-- **LLM Web Automation Katmanı**: ChatGPT/Gemini/Claude sohbet arayüzlerini Playwright ile kontrol eden sürücü soyutlaması, şu an `mock` sürücü ile demonstre edilir
+- **LLM Web Automation Katmanı**: ChatGPT/Gemini/Claude sohbet arayüzlerini Playwright ile kontrol eden sürücü soyutlaması; `mock` sürücü, cover letter / CV uyarlama / form Q&A ve eksik bilgi akışlarını demo eder, oturum testi ve web profili bağlama sihirbazı UI’da sunulur.
+- **In-memory Pipeline Store + Answer Vault**: Başvurular pipeline sütunlarına kaydedilir, cevaplar yerel kasada tutulur; gerçek ortamda SQLCipher ve macOS Keychain entegrasyonu planlanmıştır.
 - **Electron Store + SQLCipher planı**: Answer Vault ve ayarlar için yerel şifreli saklama
 
 ## Kurulum
@@ -26,23 +27,26 @@ Bu depo, macOS üzerinde çalışacak AI destekli otomatik iş başvuru uygulama
    npm start
    ```
    > Notlar:
-   > - İlk çalıştırmada “LLM Hesap Bağlama Sihirbazı” otomatik açılır ve bir sağlayıcı hesabı bağlanmadan LLM tabanlı özellikler devreye girmez.
-   > - Playwright sürücüleri demo modundadır; gerçek tarama için Playwright `install` komutlarını çalıştırmanız gerekir.
+   > - İlk açılışta onboarding formunu doldurun; UI, Answer Vault ve pipeline verilerini sizin girdilerinizle günceller.
+   > - LLM Hesap Bağlama sihirbazından (sağ üstteki buton) mock sağlayıcı için profil dizini belirleyebilir, ardından “Oturumu Test Et” ile mock web sürücüsünü doğrulayabilirsiniz.
+   > - Playwright sürücüleri demo modundadır; gerçek tarama için Playwright `install` komutlarını çalıştırmanız ve gerçek giriş profilleri sağlamanız gerekir.
    > - LLM oturum penceresi headful modda açıldığında uzun yanıtlar sırasında pencereyi kapatmayın (arka plana alınabilir).
 
 ## Testler
 ```bash
 npm test
 ```
-Node test runner ile veri modeli ve prompt derleyici testleri çalışır.
+Node test runner ile veri modeli, statik iş ilanı filtrelemesi, pipeline store ve orchestrator davranışlarını kapsayan testler çalışır.
 
 ## Dağıtım
 - macOS için paketleme aşamasında `electron-builder` veya `electron-packager` tercih edilebilir.
 - SQLCipher kurulumu: `brew install sqlcipher` sonrası Node tarafında `better-sqlite3` + `PRAGMA key` ile entegrasyon planlanmıştır.
 
 ## Örnek Akış
-1. `İlanları Tara` butonu LinkedIn/Indeed/Hiring.cafe stub sürücülerinden örnek ilanlar getirir.
-2. Her ilan kartından `CV Uyarlama` veya `Cover Letter` üretimi tetiklenir.
-3. Form soruları için Answer Vault tabanlı LLM yanıtı örneği alınır.
+1. Onboarding sekmesinde hedef roller, lokasyon, maaş eşiği ve günlük limit gibi alanları doldurun.
+2. “İlanlar” sekmesinden filtreleri seçip `İlanları Tara` ile statik veri setinden eşleşen LinkedIn/Indeed/Hiring.cafe ilanlarını listeleyin.
+3. Kart üzerindeki aksiyonlarla mock LLM’den ATS uyumlu CV diff, cover letter ve form yanıtı üretin; “Pipeline’a Ekle” ile başvuruyu pipeline görünümüne taşıyın.
+4. Answer Vault sekmesinde otomatik kaydedilen veya manuel girdiğiniz cevapları yönetin, gerektiğinde silin.
+5. Ayarlar sekmesinden hedef LLM oturumunu bağlayın ve “Oturumu Test Et” ile mock sağlayıcıyı doğrulayın.
 
 Detaylı süreç ve kenar durumları için `docs/architecture.md` dosyasına bakın.
