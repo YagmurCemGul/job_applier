@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { resolve } from 'node:path';
 import { BaseScraper } from './baseScraper.js';
 import { loadJobsForSource } from './jobDataset.js';
 
@@ -126,6 +127,8 @@ export class LinkedInScraper extends BaseScraper {
     }
 
     const steps = [];
+    const errors = [];
+    const applicant = this.applicant;
     try {
       await this.ensureLoggedIn(page, {
         authSelectors: ['.global-nav__primary-link[data-test-global-nav-link="profile"]'],
@@ -140,7 +143,9 @@ export class LinkedInScraper extends BaseScraper {
         'button[data-control-name="jobdetails_topcard_inapply"]'
       ]);
       if (!applyButton) {
-        return { success: false, steps, reason: 'apply-button-not-found' };
+        errors.push({ field: 'applyButton', reason: 'not-found' });
+        const artifacts = await this.captureDebugArtifacts(page, 'linkedin-apply-missing-button');
+        return { success: false, steps, errors, reason: 'apply-button-not-found', artifacts };
       }
 
       await applyButton.click();
@@ -148,21 +153,81 @@ export class LinkedInScraper extends BaseScraper {
 
       await page.waitForSelector('div.jobs-easy-apply-modal', { timeout: 20000 });
 
-      // Telefon, konum gibi temel alanları doldurmayı dene.
-      const phoneInput = await this.resolveLocator(page, [
-        'input[aria-label="Telefon Numarası"]',
-        'input[aria-label*="Phone number"]'
+      const fillField = async (selectors, value, stepName, mode = 'text') => {
+        if (!value) return;
+        const locator = await this.resolveLocator(page, selectors);
+        if (!locator) {
+          errors.push({ field: stepName, reason: 'selector-not-found' });
+          return;
+        }
+        try {
+          if (mode === 'text') {
+            await this.typeHuman(locator, value);
+          } else if (mode === 'select') {
+            try {
+              await locator.selectOption({ label: value });
+            } catch {
+              await locator.selectOption({ value });
+            }
+          }
+          steps.push(stepName);
+        } catch (error) {
+          errors.push({ field: stepName, reason: error.message });
+        }
+      };
+
+      await fillField(
+        [
+          'input[aria-label*="Telefon"]',
+          'input[aria-label*="Phone"]',
+          'input[data-test="phoneNumber"]'
+        ],
+        applicant.phone,
+        'fillPhone'
+      );
+      await fillField(
+        ['input[aria-label*="Email"]', 'input[data-test="emailAddress"]'],
+        applicant.email,
+        'fillEmail'
+      );
+      await fillField(
+        ['input[aria-label*="Location"]', 'input[data-test="currentLocation"]'],
+        applicant.location,
+        'fillLocation'
+      );
+      await fillField(
+        ['input[aria-label*="Last name"]', 'input[aria-label*="Full name"]'],
+        applicant.fullName ?? applicant.name,
+        'fillName'
+      );
+
+      const resumeUpload = await this.resolveLocator(page, [
+        'input[type="file"][data-test="resume-upload-input"]'
       ]);
-      if (phoneInput && this.config?.applicant?.phone) {
-        await this.typeHuman(phoneInput, this.config.applicant.phone);
-        steps.push('fillPhone');
+      if (resumeUpload && applicant?.resumePath) {
+        const resolvedPath = resolve(process.cwd(), applicant.resumePath);
+        if (await this.fileExists(resolvedPath)) {
+          await resumeUpload.setInputFiles(resolvedPath);
+          steps.push('uploadResume');
+        } else {
+          errors.push({ field: 'resume', reason: 'file-not-found', detail: resolvedPath });
+        }
       }
 
-      const resumeUpload = await this.resolveLocator(page, ['input[type="file"][data-test="resume-upload-input"]']);
-      if (resumeUpload && this.config?.applicant?.resumePath) {
-        await resumeUpload.setInputFiles(this.config.applicant.resumePath);
-        steps.push('uploadResume');
+      const coverUpload = await this.resolveLocator(page, [
+        'input[type="file"][data-test="cover-letter-upload-input"]'
+      ]);
+      if (coverUpload && applicant?.coverLetterPath) {
+        const resolvedPath = resolve(process.cwd(), applicant.coverLetterPath);
+        if (await this.fileExists(resolvedPath)) {
+          await coverUpload.setInputFiles(resolvedPath);
+          steps.push('uploadCoverLetter');
+        } else {
+          errors.push({ field: 'coverLetter', reason: 'file-not-found', detail: resolvedPath });
+        }
       }
+
+      await this.autoFillQuestions(page, applicant.answers, steps, errors);
 
       // Çok adımlı formlarda "İleri" düğmesini kontrol et.
       const nextButtonSelectors = [
@@ -174,9 +239,22 @@ export class LinkedInScraper extends BaseScraper {
       let continueButton = await this.resolveLocator(page, nextButtonSelectors);
       let safetyCounter = 0;
       while (continueButton && safetyCounter < 5) {
+        const isDisabled = await continueButton.isDisabled?.();
+        if (isDisabled) {
+          errors.push({ field: 'nextStep', reason: 'disabled-button' });
+          break;
+        }
         await continueButton.click();
         await this.humanDelay(400, 900);
         steps.push('nextStep');
+        await this.autoFillQuestions(page, applicant.answers, steps, errors);
+        const validationErrors = await this.collectValidationErrors(page);
+        if (validationErrors.length > 0) {
+          validationErrors.forEach((message) =>
+            errors.push({ field: 'form', reason: 'validation', message })
+          );
+          break;
+        }
         continueButton = await this.resolveLocator(page, nextButtonSelectors);
         safetyCounter += 1;
       }
@@ -189,12 +267,24 @@ export class LinkedInScraper extends BaseScraper {
         await submitButton.click();
         steps.push('submit');
         await this.humanDelay(800, 1200);
-        return { success: true, steps };
+        const validationErrors = await this.collectValidationErrors(page);
+        if (validationErrors.length > 0) {
+          validationErrors.forEach((message) =>
+            errors.push({ field: 'form', reason: 'validation', message })
+          );
+          const artifacts = await this.captureDebugArtifacts(page, 'linkedin-apply-validation');
+          return { success: false, steps, errors, reason: 'validation-error', artifacts };
+        }
+        return { success: true, steps, errors };
       }
 
-      return { success: false, steps, reason: 'submit-button-missing' };
+      errors.push({ field: 'submitButton', reason: 'not-found' });
+      const artifacts = await this.captureDebugArtifacts(page, 'linkedin-apply-missing-submit');
+      return { success: false, steps, errors, reason: 'submit-button-missing', artifacts };
     } catch (error) {
-      return { success: false, steps, reason: error.message };
+      errors.push({ field: 'exception', reason: error.message });
+      const artifacts = await this.captureDebugArtifacts(page, 'linkedin-apply-exception');
+      return { success: false, steps, errors, reason: error.message, artifacts };
     } finally {
       await this.closePage(page);
     }

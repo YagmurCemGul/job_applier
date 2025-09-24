@@ -17,6 +17,31 @@ let mainWindow;
 const settings = createDefaultSettings();
 const profile = createUserProfile({ name: 'Demo Kullanıcı', email: 'demo@example.com' });
 
+const applicant = {
+  name: profile.name,
+  fullName: profile.name,
+  firstName: profile.name.split(' ')[0] ?? profile.name,
+  lastName: profile.name.split(' ').slice(1).join(' ') || profile.name,
+  email: profile.email,
+  phone: '+90 555 000 0000',
+  location: profile.locations[0] ?? 'İstanbul, Türkiye',
+  city: profile.locations[0] ?? 'İstanbul',
+  address: 'İstanbul',
+  summary: 'Mac için demo başvuru notu',
+  note: 'Demo başvuru notu',
+  resumePath: 'assets/demo-resume.pdf',
+  coverLetterPath: 'assets/demo-cover-letter.pdf',
+  linkedinUrl: 'https://www.linkedin.com/in/demo-kullanici/',
+  portfolioUrl: 'https://portfolio.example.com',
+  answers: {
+    notice_period: 'Hemen başlayabilirim',
+    relocation: 'Gerekirse taşınabilirim',
+    salary_expectation: 'Yıllık 1.000.000 TRY brüt',
+    work_authorization: 'Türkiye vatandaşıyım, çalışma izni gerekmiyor',
+    remote_preference: 'Uzaktan çalışmaya açığım'
+  }
+};
+
 const provider = createProvider('mock', {
   sessionProfile: {
     profilePath: settings.browser.profilePath,
@@ -36,6 +61,10 @@ const scraperConfig = {
     profilePath: join(settings.browser.profilePath, 'scrapers'),
     launchArgs: ['--disable-blink-features=AutomationControlled'],
     slowMo: 35
+  },
+  applicant,
+  debug: {
+    artifactPath: 'artifacts/apply'
   }
 };
 const scrapers = {

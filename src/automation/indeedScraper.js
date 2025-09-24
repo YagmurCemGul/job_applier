@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { resolve } from 'node:path';
 import { BaseScraper } from './baseScraper.js';
 import { loadJobsForSource } from './jobDataset.js';
 
@@ -100,6 +101,8 @@ export class IndeedScraper extends BaseScraper {
     }
 
     const steps = [];
+    const errors = [];
+    const applicant = this.applicant;
     try {
       await this.ensureLoggedIn(page, {
         authSelectors: ['#userOptionsLabel'],
@@ -114,7 +117,9 @@ export class IndeedScraper extends BaseScraper {
         'button#indeedApplyButton'
       ]);
       if (!applyButton) {
-        return { success: false, steps, reason: 'apply-button-not-found' };
+        errors.push({ field: 'applyButton', reason: 'not-found' });
+        const artifacts = await this.captureDebugArtifacts(page, 'indeed-apply-missing-button');
+        return { success: false, steps, errors, reason: 'apply-button-not-found', artifacts };
       }
 
       await applyButton.click();
@@ -122,23 +127,59 @@ export class IndeedScraper extends BaseScraper {
 
       await page.waitForSelector('div.icl-IAForm', { timeout: 20000 });
 
-      const phoneInput = await this.resolveLocator(page, ['input[name="applicant.phoneNumber"]']);
-      if (phoneInput && this.config?.applicant?.phone) {
-        await this.typeHuman(phoneInput, this.config.applicant.phone);
-        steps.push('fillPhone');
-      }
+      const fillField = async (selectors, value, stepName, mode = 'text') => {
+        if (!value) return;
+        const locator = await this.resolveLocator(page, selectors);
+        if (!locator) {
+          errors.push({ field: stepName, reason: 'selector-not-found' });
+          return;
+        }
+        try {
+          if (mode === 'text') {
+            await this.typeHuman(locator, value);
+          } else if (mode === 'select') {
+            try {
+              await locator.selectOption({ label: value });
+            } catch {
+              await locator.selectOption({ value });
+            }
+          }
+          steps.push(stepName);
+        } catch (error) {
+          errors.push({ field: stepName, reason: error.message });
+        }
+      };
+
+      await fillField(['input[name="applicant.firstName"]'], applicant.firstName ?? applicant.name?.split(' ')[0], 'fillFirstName');
+      await fillField(['input[name="applicant.lastName"]'], applicant.lastName ?? applicant.name?.split(' ').slice(1).join(' '), 'fillLastName');
+      await fillField(['input[name="applicant.phoneNumber"]'], applicant.phone, 'fillPhone');
+      await fillField(['input[name="applicant.email"]'], applicant.email, 'fillEmail');
+      await fillField(['input[name="applicant.streetAddress"]'], applicant.address, 'fillAddress');
+      await fillField(['input[name="applicant.city"]'], applicant.city ?? applicant.location, 'fillCity');
 
       const resumeUpload = await this.resolveLocator(page, ['input[type="file"][name="resume"]']);
-      if (resumeUpload && this.config?.applicant?.resumePath) {
-        await resumeUpload.setInputFiles(this.config.applicant.resumePath);
-        steps.push('uploadResume');
+      if (resumeUpload && applicant?.resumePath) {
+        const resolvedPath = resolve(process.cwd(), applicant.resumePath);
+        if (await this.fileExists(resolvedPath)) {
+          await resumeUpload.setInputFiles(resolvedPath);
+          steps.push('uploadResume');
+        } else {
+          errors.push({ field: 'resume', reason: 'file-not-found', detail: resolvedPath });
+        }
       }
 
       const coverLetterUpload = await this.resolveLocator(page, ['input[type="file"][name="coverLetter"]']);
-      if (coverLetterUpload && this.config?.applicant?.coverLetterPath) {
-        await coverLetterUpload.setInputFiles(this.config.applicant.coverLetterPath);
-        steps.push('uploadCoverLetter');
+      if (coverLetterUpload && applicant?.coverLetterPath) {
+        const resolvedPath = resolve(process.cwd(), applicant.coverLetterPath);
+        if (await this.fileExists(resolvedPath)) {
+          await coverLetterUpload.setInputFiles(resolvedPath);
+          steps.push('uploadCoverLetter');
+        } else {
+          errors.push({ field: 'coverLetter', reason: 'file-not-found', detail: resolvedPath });
+        }
       }
+
+      await this.autoFillQuestions(page, applicant.answers, steps, errors);
 
       const continueSelectors = [
         'button[data-testid="continue-button"]',
@@ -147,9 +188,22 @@ export class IndeedScraper extends BaseScraper {
       let continueButton = await this.resolveLocator(page, continueSelectors);
       let guard = 0;
       while (continueButton && guard < 5) {
+        const isDisabled = await continueButton.isDisabled?.();
+        if (isDisabled) {
+          errors.push({ field: 'nextStep', reason: 'disabled-button' });
+          break;
+        }
         await continueButton.click();
         await this.humanDelay(400, 900);
-        steps.push('nextStep');
+        steps.push(`nextStep-${guard + 1}`);
+        await this.autoFillQuestions(page, applicant.answers, steps, errors);
+        const validationErrors = await this.collectValidationErrors(page);
+        if (validationErrors.length > 0) {
+          validationErrors.forEach((message) =>
+            errors.push({ field: 'form', reason: 'validation', message })
+          );
+          break;
+        }
         continueButton = await this.resolveLocator(page, continueSelectors);
         guard += 1;
       }
@@ -162,12 +216,24 @@ export class IndeedScraper extends BaseScraper {
         await submitButton.click();
         steps.push('submit');
         await this.humanDelay(800, 1200);
-        return { success: true, steps };
+        const validationErrors = await this.collectValidationErrors(page);
+        if (validationErrors.length > 0) {
+          validationErrors.forEach((message) =>
+            errors.push({ field: 'form', reason: 'validation', message })
+          );
+          const artifacts = await this.captureDebugArtifacts(page, 'indeed-apply-validation');
+          return { success: false, steps, errors, reason: 'validation-error', artifacts };
+        }
+        return { success: true, steps, errors };
       }
 
-      return { success: false, steps, reason: 'submit-button-missing' };
+      errors.push({ field: 'submitButton', reason: 'not-found' });
+      const artifacts = await this.captureDebugArtifacts(page, 'indeed-apply-missing-submit');
+      return { success: false, steps, errors, reason: 'submit-button-missing', artifacts };
     } catch (error) {
-      return { success: false, steps, reason: error.message };
+      errors.push({ field: 'exception', reason: error.message });
+      const artifacts = await this.captureDebugArtifacts(page, 'indeed-apply-exception');
+      return { success: false, steps, errors, reason: error.message, artifacts };
     } finally {
       await this.closePage(page);
     }

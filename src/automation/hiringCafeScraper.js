@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { resolve } from 'node:path';
 import { BaseScraper } from './baseScraper.js';
 import { loadJobsForSource } from './jobDataset.js';
 
@@ -95,6 +96,8 @@ export class HiringCafeScraper extends BaseScraper {
     }
 
     const steps = [];
+    const errors = [];
+    const applicant = this.applicant;
     try {
       const externalApply = await this.resolveLocator(page, [
         'a[href*="apply"]',
@@ -104,20 +107,102 @@ export class HiringCafeScraper extends BaseScraper {
       if (externalApply) {
         const href = await externalApply.getAttribute('href');
         steps.push('openExternal');
-        return { success: true, steps, externalUrl: href ?? job.url };
+        return { success: true, steps, errors, externalUrl: href ?? job.url };
       }
 
       const applyButton = await this.resolveLocator(page, ['button[type="submit"]', 'button[data-role="apply"]']);
       if (applyButton) {
         await applyButton.click();
-        steps.push('submit');
-        await this.humanDelay(400, 700);
-        return { success: true, steps };
+        steps.push('openInlineForm');
+        await this.humanDelay(300, 600);
       }
 
-      return { success: false, steps, reason: 'apply-target-not-found' };
+      const form = await this.resolveLocator(page, ['form[action*="apply"]', 'form[data-role="application"]']);
+      if (form) {
+        const fillField = async (selectors, value, stepName) => {
+          if (!value) return;
+          const locator = await this.resolveLocator(page, selectors);
+          if (!locator) {
+            errors.push({ field: stepName, reason: 'selector-not-found' });
+            return;
+          }
+          try {
+            await this.typeHuman(locator, value);
+            steps.push(stepName);
+          } catch (error) {
+            errors.push({ field: stepName, reason: error.message });
+          }
+        };
+
+        await fillField(['input[name*="name"]', 'input[placeholder*="Name"]'], applicant.fullName ?? applicant.name, 'fillName');
+        await fillField(['input[type="email"]', 'input[name*="email"]'], applicant.email, 'fillEmail');
+        await fillField(['input[type="tel"]', 'input[name*="phone"]'], applicant.phone, 'fillPhone');
+        await fillField(['input[name*="location"]', 'input[name*="city"]'], applicant.location, 'fillLocation');
+        await fillField(['textarea[name*="note"]', 'textarea[name*="message"]'], applicant.note ?? applicant.summary, 'fillNotes');
+
+        await this.autoFillQuestions(page, applicant.answers, steps, errors);
+
+        const resumeUpload = await this.resolveLocator(page, [
+          'input[type="file"][name*="resume"]',
+          'input[type="file"][data-role="resume-upload"]'
+        ]);
+        if (resumeUpload && applicant?.resumePath) {
+          const resolvedPath = resolve(process.cwd(), applicant.resumePath);
+          if (await this.fileExists(resolvedPath)) {
+            await resumeUpload.setInputFiles(resolvedPath);
+            steps.push('uploadResume');
+          } else {
+            errors.push({ field: 'resume', reason: 'file-not-found', detail: resolvedPath });
+          }
+        }
+
+        const coverUpload = await this.resolveLocator(page, [
+          'input[type="file"][name*="cover"]',
+          'input[type="file"][data-role="cover-upload"]'
+        ]);
+        if (coverUpload && applicant?.coverLetterPath) {
+          const resolvedPath = resolve(process.cwd(), applicant.coverLetterPath);
+          if (await this.fileExists(resolvedPath)) {
+            await coverUpload.setInputFiles(resolvedPath);
+            steps.push('uploadCoverLetter');
+          } else {
+            errors.push({ field: 'coverLetter', reason: 'file-not-found', detail: resolvedPath });
+          }
+        }
+
+        const submitLocator = await this.resolveLocator(page, [
+          'button[type="submit"]',
+          'button[data-role="submit-application"]'
+        ]);
+        if (submitLocator) {
+          await submitLocator.click();
+          steps.push('submit');
+          await this.humanDelay(500, 800);
+          const validationErrors = await this.collectValidationErrors(page);
+          if (validationErrors.length > 0) {
+            validationErrors.forEach((message) =>
+              errors.push({ field: 'form', reason: 'validation', message })
+            );
+            const artifacts = await this.captureDebugArtifacts(page, 'hiringcafe-apply-validation');
+            return { success: false, steps, errors, reason: 'validation-error', artifacts };
+          }
+          return { success: true, steps, errors };
+        }
+      }
+
+      if (applyButton) {
+        const artifacts = await this.captureDebugArtifacts(page, 'hiringcafe-apply-submit-missing');
+        errors.push({ field: 'submitButton', reason: 'not-found' });
+        return { success: false, steps, errors, reason: 'submit-button-missing', artifacts };
+      }
+
+      const artifacts = await this.captureDebugArtifacts(page, 'hiringcafe-apply-no-form');
+      errors.push({ field: 'form', reason: 'apply-target-not-found' });
+      return { success: false, steps, errors, reason: 'apply-target-not-found', artifacts };
     } catch (error) {
-      return { success: false, steps, reason: error.message };
+      errors.push({ field: 'exception', reason: error.message });
+      const artifacts = await this.captureDebugArtifacts(page, 'hiringcafe-apply-exception');
+      return { success: false, steps, errors, reason: error.message, artifacts };
     } finally {
       await this.closePage(page);
     }

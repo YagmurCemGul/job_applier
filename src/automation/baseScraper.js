@@ -1,5 +1,5 @@
 import { setTimeout as wait } from 'node:timers/promises';
-import { mkdir } from 'node:fs/promises';
+import { access, mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { chromium, firefox, webkit } from 'playwright';
 
@@ -24,6 +24,14 @@ export class BaseScraper {
     const envDisable = process.env.PLAYWRIGHT_SCRAPERS_DISABLED === '1';
     this.disableAutomation = this.config?.disableAutomation ?? envDisable;
     this.managedContext = false;
+  }
+
+  get applicant() {
+    return this.config?.applicant ?? {};
+  }
+
+  get applicantAnswers() {
+    return this.applicant?.answers ?? {};
   }
 
   /**
@@ -209,6 +217,198 @@ export class BaseScraper {
       await page.close();
     } catch (error) {
       this.logger?.warn?.(`[${this.constructor.name}] Sayfa kapatma hatası: ${error.message}`);
+    }
+  }
+
+  normalizeQuestionKey(text) {
+    if (!text) return '';
+    return text
+      .toLowerCase()
+      .replace(/[^a-z0-9çğıöşü\s]/gi, '')
+      .trim()
+      .replace(/\s+/g, '_')
+      .slice(0, 160);
+  }
+
+  lookupAnswer(questionText, answers = this.applicantAnswers) {
+    if (!questionText) return undefined;
+    const normalized = this.normalizeQuestionKey(questionText);
+    return answers?.[normalized] ?? answers?.[questionText] ?? undefined;
+  }
+
+  async autoFillQuestions(page, answers = this.applicantAnswers, steps = [], errors = []) {
+    if (!answers || Object.keys(answers).length === 0) {
+      return;
+    }
+
+    const questionSelectors = [
+      '[data-test-form-element]',
+      '.jobs-easy-apply-form-element',
+      '.ia-FormQuestion',
+      'fieldset[data-test-form-element]',
+      'div[data-testid="QuestionContainer"]'
+    ];
+
+    const handles = await page.$$(questionSelectors.join(','));
+    for (const handle of handles) {
+      try {
+        const questionText = await handle.evaluate((node) => {
+          const label =
+            node.querySelector('.jobs-easy-apply-form-element__question') ||
+            node.querySelector('[data-test="form-label"]') ||
+            node.querySelector('label, legend, h2, h3, h4');
+          return label?.textContent?.trim() ?? '';
+        });
+        if (!questionText) continue;
+        const answerValue = this.lookupAnswer(questionText, answers);
+        if (!answerValue) continue;
+        const normalizedKey = this.normalizeQuestionKey(questionText);
+        const descriptor =
+          typeof answerValue === 'string'
+            ? { value: answerValue, type: 'text' }
+            : { type: 'text', ...answerValue };
+
+        let filled = false;
+
+        const input = await handle.$('textarea, input[type="text"], input[type="number"], input[type="tel"], input[type="url"], input:not([type])');
+        if (input && descriptor.type !== 'select' && descriptor.type !== 'option') {
+          await input.fill('');
+          await input.type(descriptor.value, { delay: 40 + Math.random() * 80 });
+          filled = true;
+        }
+
+        if (!filled) {
+          const select = await handle.$('select');
+          if (select) {
+            try {
+              await select.selectOption({ label: descriptor.value });
+            } catch {
+              await select.selectOption({ value: descriptor.value });
+            }
+            filled = true;
+          }
+        }
+
+        if (!filled) {
+          const radios = await handle.$$('input[type="radio"]');
+          if (radios.length > 0) {
+            const lowerValue = descriptor.value.toLowerCase();
+            for (const radio of radios) {
+              const label = await radio.evaluate((node) => {
+                const labelNode = node.closest('label') ?? node.parentElement;
+                return labelNode?.textContent?.trim() ?? '';
+              });
+              if (label.toLowerCase().includes(lowerValue)) {
+                await radio.click();
+                filled = true;
+                break;
+              }
+            }
+          }
+        }
+
+        if (!filled) {
+          const checkboxes = await handle.$$('input[type="checkbox"]');
+          if (checkboxes.length > 0) {
+            const shouldCheck = descriptor.value === true || descriptor.value === 'true' || descriptor.value === 'yes';
+            for (const checkbox of checkboxes) {
+              const isChecked = await checkbox.isChecked();
+              if (shouldCheck && !isChecked) {
+                await checkbox.click();
+                filled = true;
+              } else if (!shouldCheck && isChecked) {
+                await checkbox.click();
+                filled = true;
+              }
+            }
+          }
+        }
+
+        if (!filled) {
+          errors.push({ field: questionText, reason: 'answer-apply-failed' });
+        } else {
+          steps.push(`answer:${normalizedKey}`);
+        }
+      } catch (error) {
+        errors.push({ field: 'dynamic-question', reason: error.message });
+      }
+    }
+  }
+
+  async collectValidationErrors(page) {
+    const selectors = [
+      '.artdeco-inline-feedback__message',
+      '.artdeco-toast-item__message',
+      '.jobs-easy-apply-alert__text',
+      '.ia-ErrorMessage',
+      'div[role="alert"]',
+      '[data-test="form-error-message"]'
+    ];
+    try {
+      const messages = await page.evaluate((errorSelectors) => {
+        const unique = new Set();
+        errorSelectors.forEach((selector) => {
+          document.querySelectorAll(selector).forEach((node) => {
+            const text = node.textContent?.trim();
+            if (text) {
+              unique.add(text);
+            }
+          });
+        });
+        return Array.from(unique);
+      }, selectors);
+      return messages;
+    } catch (error) {
+      this.logger?.warn?.(
+        `[${this.constructor.name}] Doğrulama hataları okunamadı: ${error.message}`
+      );
+      return [];
+    }
+  }
+
+  async captureDebugArtifacts(page, prefix = 'apply') {
+    const targetDir = resolve(
+      process.cwd(),
+      this.config?.debug?.artifactPath ?? 'artifacts/apply'
+    );
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const baseName = `${prefix}-${timestamp}`;
+    const screenshotPath = resolve(targetDir, `${baseName}.png`);
+    const htmlPath = resolve(targetDir, `${baseName}.html`);
+    try {
+      await mkdir(targetDir, { recursive: true });
+    } catch (error) {
+      this.logger?.warn?.(
+        `[${this.constructor.name}] Artifact klasörü oluşturulamadı: ${error.message}`
+      );
+    }
+
+    try {
+      await page.screenshot({ path: screenshotPath, fullPage: true });
+    } catch (error) {
+      this.logger?.warn?.(
+        `[${this.constructor.name}] Screenshot alınamadı: ${error.message}`
+      );
+    }
+
+    try {
+      const html = await page.content();
+      await writeFile(htmlPath, html, 'utf8');
+    } catch (error) {
+      this.logger?.warn?.(
+        `[${this.constructor.name}] HTML snapshot kaydedilemedi: ${error.message}`
+      );
+    }
+
+    return { screenshotPath, htmlPath };
+  }
+
+  async fileExists(filePath) {
+    try {
+      await access(filePath);
+      return true;
+    } catch {
+      return false;
     }
   }
 
