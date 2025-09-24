@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <title>Gemini Mock</title>
+    <style>
+      body { font-family: sans-serif; margin: 24px; }
+      main { margin-top: 16px; }
+      article { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin-bottom: 12px; }
+      md-linear-progress, md-circular-progress { display: none; width: 100%; height: 4px; background: linear-gradient(90deg, #2196f3, #21cbf3); animation: progress 1.2s infinite; }
+      @keyframes progress { 0% { opacity: 0.2; } 50% { opacity: 1; } 100% { opacity: 0.2; } }
+    </style>
+  </head>
+  <body>
+    <textarea name="promptTextArea" aria-label="Mesaj" rows="4" cols="50"></textarea>
+    <div style="margin-top: 8px; display:flex; gap: 8px; align-items: center;">
+      <button aria-label="Send message">Gönder</button>
+      <button aria-label="Stop" style="display:none">Durdur</button>
+      <md-linear-progress></md-linear-progress>
+      <div role="progressbar" style="display:none">Yükleniyor</div>
+    </div>
+    <main>
+      <article>
+        <markdown>Başlangıç yanıtı</markdown>
+      </article>
+    </main>
+    <script>
+      const textarea = document.querySelector('textarea[name="promptTextArea"]');
+      const sendButton = document.querySelector('button[aria-label="Send message"]');
+      const stopButton = document.querySelector('button[aria-label="Stop"]');
+      const linearProgress = document.querySelector('md-linear-progress');
+      const progressBar = document.querySelector('[role="progressbar"]');
+      const main = document.querySelector('main');
+
+      window.addEventListener('DOMContentLoaded', () => {
+        localStorage.setItem('gemini-bootstrap', 'ready');
+      });
+
+      function appendResponse(text) {
+        const article = document.createElement('article');
+        const markdown = document.createElement('markdown');
+        markdown.textContent = text;
+        article.appendChild(markdown);
+        main.appendChild(article);
+      }
+
+      sendButton.addEventListener('click', () => {
+        stopButton.style.display = 'inline-flex';
+        linearProgress.style.display = 'block';
+        progressBar.style.display = 'block';
+        appendResponse('Hazırlanıyor...');
+        const promptValue = textarea.value;
+        setTimeout(() => {
+          stopButton.style.display = 'none';
+          linearProgress.style.display = 'none';
+          progressBar.style.display = 'none';
+          appendResponse('Gemini Yanıtı: ' + promptValue);
+        }, 250);
+      });
+    </script>
+  </body>
+</html>

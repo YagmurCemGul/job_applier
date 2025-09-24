@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <title>Claude Mock</title>
+    <style>
+      body { font-family: sans-serif; margin: 24px; }
+      section[data-testid="chat-message"] { border: 1px solid #bbb; border-radius: 8px; padding: 12px; margin-top: 12px; }
+      .loading-dots { display: none; }
+      .spinner { display: none; width: 16px; height: 16px; border-radius: 50%; border: 3px solid #999; border-top-color: #111; animation: rotate 1s linear infinite; }
+      @keyframes rotate { to { transform: rotate(360deg); } }
+    </style>
+  </head>
+  <body>
+    <textarea data-testid="input-textarea" placeholder="Message Claude" rows="4" cols="50"></textarea>
+    <div style="margin-top: 8px; display:flex; gap: 8px; align-items: center;">
+      <button data-testid="send-button">Send</button>
+      <button data-testid="stop-button" style="display:none">Stop</button>
+      <div data-testid="typing-indicator" class="loading-dots">...</div>
+      <div class="spinner" data-spinner="true"></div>
+    </div>
+    <section data-testid="chat-message">
+      <article>Hazır</article>
+    </section>
+    <script>
+      const textarea = document.querySelector('textarea[data-testid="input-textarea"]');
+      const sendButton = document.querySelector('button[data-testid="send-button"]');
+      const stopButton = document.querySelector('button[data-testid="stop-button"]');
+      const typingIndicator = document.querySelector('[data-testid="typing-indicator"]');
+      const spinner = document.querySelector('[data-spinner="true"]');
+      const section = document.querySelector('section[data-testid="chat-message"]');
+
+      window.addEventListener('DOMContentLoaded', () => {
+        localStorage.setItem('claude-bootstrap', 'ready');
+      });
+
+      function appendResponse(text) {
+        const article = document.createElement('article');
+        article.textContent = text;
+        section.appendChild(article);
+      }
+
+      sendButton.addEventListener('click', () => {
+        stopButton.style.display = 'inline-flex';
+        typingIndicator.style.display = 'block';
+        spinner.style.display = 'block';
+        appendResponse('Hazırlanıyor...');
+        const promptValue = textarea.value;
+        setTimeout(() => {
+          stopButton.style.display = 'none';
+          typingIndicator.style.display = 'none';
+          spinner.style.display = 'none';
+          appendResponse('Claude Yanıtı: ' + promptValue);
+        }, 250);
+      });
+    </script>
+  </body>
+</html>

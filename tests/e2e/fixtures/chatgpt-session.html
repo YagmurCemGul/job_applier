@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <title>ChatGPT Mock</title>
+    <style>
+      body { font-family: sans-serif; margin: 24px; }
+      #responses { margin-top: 16px; display: flex; flex-direction: column; gap: 12px; }
+      .turn { padding: 12px; border: 1px solid #ccc; border-radius: 8px; }
+      .typing-indicator { display: none; color: #555; }
+      .spinner { display: none; width: 24px; height: 24px; border: 3px solid #ccc; border-top-color: #333; border-radius: 50%; animation: spin 1s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+  </head>
+  <body>
+    <textarea id="prompt-textarea" placeholder="Mesajınızı yazın" rows="4" cols="50"></textarea>
+    <div style="margin-top: 8px; display: flex; gap: 8px; align-items: center;">
+      <button data-testid="send-button">Gönder</button>
+      <button data-testid="stop-button" style="display:none">Durdur</button>
+      <div class="typingIndicator typing-indicator" data-testid="conversation-turn">
+        <div class="markdown">Yazılıyor...</div>
+      </div>
+      <div class="spinner" data-testid="spinner"></div>
+    </div>
+    <div id="responses"></div>
+    <script>
+      const textarea = document.getElementById('prompt-textarea');
+      const sendButton = document.querySelector('button[data-testid="send-button"]');
+      const stopButton = document.querySelector('button[data-testid="stop-button"]');
+      const typingIndicator = document.querySelector('.typing-indicator');
+      const spinner = document.querySelector('.spinner');
+      const responses = document.getElementById('responses');
+
+      window.addEventListener('DOMContentLoaded', () => {
+        localStorage.setItem('bootstrapped', 'true');
+      });
+
+      function appendResponse(text) {
+        const turn = document.createElement('div');
+        turn.setAttribute('data-testid', 'conversation-turn');
+        turn.className = 'turn';
+        const markdown = document.createElement('div');
+        markdown.className = 'markdown';
+        markdown.textContent = text;
+        turn.appendChild(markdown);
+        responses.appendChild(turn);
+      }
+
+      sendButton.addEventListener('click', () => {
+        stopButton.style.display = 'block';
+        typingIndicator.style.display = 'block';
+        spinner.style.display = 'block';
+        appendResponse('Yanıt hazırlanıyor...');
+        const promptValue = textarea.value;
+        setTimeout(() => {
+          stopButton.style.display = 'none';
+          typingIndicator.style.display = 'none';
+          spinner.style.display = 'none';
+          appendResponse('Tamamlanan Yanıt: ' + promptValue);
+        }, 250);
+      });
+    </script>
+  </body>
+</html>

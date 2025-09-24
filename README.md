@@ -42,6 +42,11 @@ npm test
 ```
 Node test runner ile veri modeli, statik iş ilanı filtrelemesi, pipeline store ve orchestrator davranışlarını kapsayan testler çalışır.
 
+```bash
+npm run test:e2e
+```
+Playwright tabanlı headful/kalıcı profil senaryolarını CI ortamında headless moda düşerek simüle eder; ChatGPT/Gemini/Claude web sürücülerinin oturum açma, yanıt üretimi, yeniden oturum açma ve CAPTCHA tespiti davranışlarını doğrular.
+
 ## Dağıtım
 - macOS için paketleme aşamasında `electron-builder` veya `electron-packager` tercih edilebilir.
 - SQLCipher kurulumu: `brew install sqlcipher` sonrası Node tarafında `better-sqlite3` + `PRAGMA key` ile entegrasyon planlanmıştır.
