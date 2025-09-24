@@ -153,7 +153,7 @@ ipcMain.handle('orchestrator:saveVaultEntry', async (_event, entry) => {
 });
 
 ipcMain.handle('orchestrator:deleteVaultEntry', async (_event, questionKey) => {
-  orchestrator.deleteVaultEntry(questionKey);
+  await orchestrator.deleteVaultEntry(questionKey);
   return true;
 });
 

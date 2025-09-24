@@ -8,10 +8,10 @@ let defaultVaultAdapter;
 try {
   const vaultModule = await import('../data/vault.js');
   defaultVaultAdapter = {
-    get: vaultModule.getAnswer,
-    set: vaultModule.upsertAnswer,
-    list: vaultModule.listAnswers,
-    remove: vaultModule.removeAnswer
+    get: (key) => vaultModule.getAnswer(key),
+    set: (entry) => vaultModule.upsertAnswer(entry),
+    list: () => vaultModule.listAnswers(),
+    remove: (key) => vaultModule.removeAnswer(key)
   };
 } catch (error) {
   defaultVaultAdapter = {
@@ -100,7 +100,7 @@ export class Orchestrator {
 
   async answerQuestion(question, vaultEntry) {
     const questionKey = buildQuestionKey(question);
-    const existing = vaultEntry ?? this.vault.get(questionKey);
+    const existing = vaultEntry ?? (await this.vault.get(questionKey));
     if (existing?.answer) {
       return {
         answer: existing.answer,
@@ -112,7 +112,7 @@ export class Orchestrator {
     const prompt = composePrompt('form_qa', {
       QUESTION: question,
       PROFILE: this.profile,
-      VAULT: this.vault.list()
+      VAULT: await this.vault.list()
     });
     const response = await this.provider.answerFormQuestion({
       question,
@@ -121,7 +121,7 @@ export class Orchestrator {
       vaultEntry: existing
     });
     if (!response.needsUserApproval && response.answer) {
-      this.vault.set({
+      await this.vault.set({
         questionKey,
         answer: response.answer,
         lang: QUESTION_LANG,
@@ -131,20 +131,20 @@ export class Orchestrator {
     return { ...response, questionKey };
   }
 
-  getVaultEntries() {
+  async getVaultEntries() {
     return this.vault.list();
   }
 
-  saveVaultEntry(entry) {
-    this.vault.set({
+  async saveVaultEntry(entry) {
+    await this.vault.set({
       ...entry,
       updatedAt: entry.updatedAt ?? new Date().toISOString()
     });
     return this.vault.get(entry.questionKey);
   }
 
-  deleteVaultEntry(questionKey) {
-    this.vault.remove(questionKey);
+  async deleteVaultEntry(questionKey) {
+    await this.vault.remove(questionKey);
   }
 
   listApplications() {

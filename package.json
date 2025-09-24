@@ -10,7 +10,8 @@
     "test": "node --test"
   },
   "dependencies": {
-    "electron-store": "^9.0.0",
+    "@journeyapps/sqlcipher": "^5.3.1",
+    "keytar": "^7.9.0",
     "uuid": "^9.0.1"
   },
   "devDependencies": {
