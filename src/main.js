@@ -29,12 +29,37 @@ const scraperConfig = {
     linkedin: settings.rateLimits.perProviderPerMin,
     indeed: settings.rateLimits.perProviderPerMin,
     hiringCafe: settings.rateLimits.perProviderPerMin
+  },
+  browser: {
+    engine: settings.browser.engine,
+    headless: settings.browser.headless,
+    profilePath: join(settings.browser.profilePath, 'scrapers'),
+    launchArgs: ['--disable-blink-features=AutomationControlled'],
+    slowMo: 35
   }
 };
 const scrapers = {
-  linkedin: new LinkedInScraper({ playwright: /** @type {any} */ (null), config: scraperConfig }),
-  indeed: new IndeedScraper({ playwright: /** @type {any} */ (null), config: scraperConfig }),
-  hiringCafe: new HiringCafeScraper({ playwright: /** @type {any} */ (null), config: scraperConfig })
+  linkedin: new LinkedInScraper({
+    playwright: /** @type {any} */ (null),
+    config: {
+      ...scraperConfig,
+      browser: { ...scraperConfig.browser, profilePath: join(scraperConfig.browser.profilePath, 'linkedin') }
+    }
+  }),
+  indeed: new IndeedScraper({
+    playwright: /** @type {any} */ (null),
+    config: {
+      ...scraperConfig,
+      browser: { ...scraperConfig.browser, profilePath: join(scraperConfig.browser.profilePath, 'indeed') }
+    }
+  }),
+  hiringCafe: new HiringCafeScraper({
+    playwright: /** @type {any} */ (null),
+    config: {
+      ...scraperConfig,
+      browser: { ...scraperConfig.browser, profilePath: join(scraperConfig.browser.profilePath, 'hiringcafe') }
+    }
+  })
 };
 
 const pipelineStore = new PipelineStore();
