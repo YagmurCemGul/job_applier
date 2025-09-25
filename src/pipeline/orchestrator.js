@@ -56,6 +56,10 @@ export class Orchestrator {
     this.jobCache = new Map();
   }
 
+  setProvider(provider) {
+    this.provider = provider;
+  }
+
   /**
    * @param {{ filters: Record<string, any> }} params
    */
@@ -69,9 +73,9 @@ export class Orchestrator {
     return jobs.map((job) => {
       this.jobCache.set(job.id, job);
       return {
-      job,
-      match: computeMatchScore(job, this.profile)
-    };
+        job,
+        match: computeMatchScore(job, this.profile)
+      };
     });
   }
 

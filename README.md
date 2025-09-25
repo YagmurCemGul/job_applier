@@ -22,11 +22,15 @@ Bu depo, macOS üzerinde çalışacak AI destekli otomatik iş başvuru uygulama
    ```bash
    npm install
    ```
-4. Tailwind CSS ve React renderer paketini derleyin (Electron komutu bunu otomatik olarak çalıştırır ancak manuel derleme için kullanılabilir):
+4. Playwright tarayıcı ikililerini indirin (ilk kurulumda zorunlu):
+   ```bash
+   npx playwright install
+   ```
+5. Tailwind CSS ve React renderer paketini derleyin (Electron komutu bunu otomatik olarak çalıştırır ancak manuel derleme için kullanılabilir):
    ```bash
    npm run build
    ```
-5. Elektron örneğini başlatın:
+6. Elektron örneğini başlatın:
    ```bash
    npm start
    ```

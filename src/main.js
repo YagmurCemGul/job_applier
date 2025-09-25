@@ -14,7 +14,7 @@ const __dirname = dirname(__filename);
 
 let mainWindow;
 
-const settings = createDefaultSettings();
+let settings = createDefaultSettings();
 const profile = createUserProfile({ name: 'Demo Kullanıcı', email: 'demo@example.com' });
 
 const applicant = {
@@ -42,12 +42,25 @@ const applicant = {
   }
 };
 
-const provider = createProvider('mock', {
-  sessionProfile: {
-    profilePath: settings.browser.profilePath,
-    source: 'demo'
-  }
-});
+let currentProviderKey = settings.targetLLM ?? 'mock';
+
+function buildProviderFromSettings(target = settings.targetLLM) {
+  const providerKey = target ?? 'mock';
+  const sessionProfile = settings.sessions?.[providerKey];
+  const browserDefaults = {
+    engine: settings.browser.engine,
+    headless: settings.browser.headless,
+    profilePath: join(settings.browser.profilePath, 'llm', providerKey)
+  };
+  return createProvider(providerKey, {
+    sessionProfile,
+    browserDefaults,
+    launchArgs: settings.browser?.launchArgs ?? ['--disable-blink-features=AutomationControlled'],
+    antiStall: { scroll: true, refocus: true, jitter: true }
+  });
+}
+
+let provider = buildProviderFromSettings(currentProviderKey);
 const scraperConfig = {
   rateLimits: {
     global: settings.rateLimits.globalPerMin,
@@ -93,6 +106,12 @@ const scrapers = {
 
 const pipelineStore = new PipelineStore();
 const orchestrator = new Orchestrator({ provider, scrapers, profile, settings, pipelineStore });
+
+function refreshProvider(target = settings.targetLLM) {
+  currentProviderKey = target ?? settings.targetLLM ?? 'mock';
+  provider = buildProviderFromSettings(currentProviderKey);
+  orchestrator.setProvider(provider);
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -186,11 +205,28 @@ ipcMain.handle('settings:get', async () => {
 });
 
 ipcMain.handle('settings:update', async (_event, patch) => {
-  return orchestrator.updateSettings(patch);
+  const previousTarget = currentProviderKey;
+  settings = orchestrator.updateSettings(patch);
+  const newTarget = settings.targetLLM ?? 'mock';
+  const activeSession = settings.sessions?.[newTarget];
+  const targetChanged = previousTarget !== newTarget;
+  const browserChanged = Boolean(patch?.browser);
+  const sessionUpdated = Boolean(patch?.sessions?.[newTarget]);
+
+  if (targetChanged || browserChanged) {
+    refreshProvider(newTarget);
+  } else if (sessionUpdated && activeSession) {
+    provider.setDefaultSessionProfile(activeSession);
+  }
+
+  return settings;
 });
 
 ipcMain.handle('settings:bindSession', async (_event, { provider: providerKey, sessionProfile }) => {
-  return orchestrator.bindSession(providerKey, sessionProfile);
+  const session = orchestrator.bindSession(providerKey, sessionProfile);
+  settings = orchestrator.getSettings();
+  refreshProvider(providerKey);
+  return session;
 });
 
 ipcMain.handle('settings:testSession', async () => {
